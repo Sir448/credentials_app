@@ -1,12 +1,28 @@
+import 'dart:async';
+
+import 'package:credentials_app/database_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_search_bar/flutter_search_bar.dart';
 
+import 'package:path/path.dart';
+import 'package:sqflite_sqlcipher/sqflite.dart';
+import 'package:sqflite_sqlcipher/sql.dart';
+import 'package:sqflite_sqlcipher/sqlite_api.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'package:dynamic_theme/dynamic_theme.dart';
+
 import 'credentials.dart';
 
-void main() => runApp(MyApp());
+// StreamController<bool> isLightMode = StreamController();
+
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(MyApp());
+}
 
 // void main() {
 //   runApp(MaterialApp(
@@ -14,15 +30,30 @@ void main() => runApp(MyApp());
 //     home: Profile(),
 //   ));
 // }
+// Future<void> getMode() async {
+//   SharedPreferences prefs = await SharedPreferences.getInstance();
+//   isLightMode.add(prefs.getBool('lightMode') ?? true);
+// }
 
 class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Credentials',
-      theme: ThemeData(
+    return new DynamicTheme(
+      defaultBrightness: Brightness.light,
+      data: (brightness) => new ThemeData(
         primarySwatch: Colors.blue,
+        // primaryColor: Colors.black,
+        brightness: brightness,
+        floatingActionButtonTheme: FloatingActionButtonThemeData(
+          backgroundColor: brightness == Brightness.dark ? Colors.black : null,
+        ),
       ),
-      home: CredentialsList(),
+      themedWidgetBuilder: (context, theme) {
+        return MaterialApp(
+          title: 'Credentials',
+          theme: theme,
+          home: CredentialsList(),
+        );
+      },
     );
   }
 }
@@ -35,12 +66,37 @@ class CredentialsList extends StatefulWidget {
 class _CredentialsListState extends State<CredentialsList> {
   var _credentialsList = <Credentials>[];
   SearchBar searchBar;
+  String search;
+  bool searching = false;
 
+  // void _toggleDarkMode() async {
+  //   SharedPreferences prefs = await SharedPreferences.getInstance();
+  //   bool lightMode = prefs.getBool('lightMode') ?? true;
+  //   isLightMode.add(!lightMode);
+  //   prefs.setBool('lightMode', !lightMode);
+  // }
+
+  void empty() {}
   AppBar buildAppBar(BuildContext context) {
     return new AppBar(
-      title: new Text('Credentials'),
+      title: new Text(
+        searching ? search : 'Credentials',
+        style: searching
+            ? TextStyle(fontSize: 16, fontWeight: FontWeight.w400)
+            : null,
+      ),
+      leading: searching
+          ? IconButton(
+              icon: Icon(Icons.arrow_back),
+              onPressed: () {
+                searching = false;
+                setState(() {});
+              })
+          : null,
+      // leading: IconButton(icon: Icon(Icons.arrow_back), onPressed: empty),
       actions: [
         searchBar.getSearchAction(context),
+        // IconButton(icon: Icon(Icon.), onPressed: empty)
       ],
     );
   }
@@ -49,32 +105,58 @@ class _CredentialsListState extends State<CredentialsList> {
     searchBar = new SearchBar(
       inBar: true,
       setState: setState,
-      onSubmitted: print,
+      onSubmitted: (value) {
+        searching = true;
+        search = value;
+        setState(() {});
+      },
       buildDefaultAppBar: buildAppBar,
     );
   }
 
+  // Widget _buildList() {
+  //   return ListView.separated(
+  //       separatorBuilder: (context, index) => Divider(),
+  //       itemCount: _credentialsList.length,
+  //       padding: EdgeInsets.all(16.0),
+  //       itemBuilder: /*1*/ (context, i) {
+  //         return _buildRow(_credentialsList[i], context, i);
+  //       });
+  // }
+
   Widget _buildList() {
-    return ListView.separated(
-        separatorBuilder: (context, index) => Divider(),
-        itemCount: _credentialsList.length,
-        padding: EdgeInsets.all(16.0),
-        itemBuilder: /*1*/ (context, i) {
-          return _buildRow(_credentialsList[i], context, i);
+    var db = new DatabaseHelper();
+    return FutureBuilder<List>(
+        future:
+            searching ? db.searchCredentials(search) : db.getAllCredentials(),
+        builder: (BuildContext context, AsyncSnapshot<List> snapshot) {
+          Widget child;
+          if (snapshot.hasData && snapshot.data.isNotEmpty) {
+            child = ListView.separated(
+                separatorBuilder: (context, index) => Divider(),
+                itemCount: snapshot.data.length,
+                padding: EdgeInsets.all(16.0),
+                itemBuilder: /*1*/ (context, i) {
+                  return _buildRow(snapshot.data[i], context, i);
+                });
+          } else {
+            child = Container();
+          }
+          return child;
         });
   }
 
   Widget _buildRow(Credentials credentials, BuildContext context, int i) {
     return ListTile(
       title: Text(
-        credentials.accountName == null
+        credentials.accountName == "null"
             ? credentials.platform
             : "${credentials.platform}: ${credentials.accountName}",
         style: TextStyle(fontSize: 18.0),
       ),
       onTap: () {
         // if(_authenticate())
-        _awaitProfile(context, credentials, i);
+        _awaitProfile(context, credentials.platform, credentials.accountName);
       },
     );
   }
@@ -90,36 +172,59 @@ class _CredentialsListState extends State<CredentialsList> {
       MaterialPageRoute(
           builder: (context) => AddCredentials(
                 credentials: Credentials(null),
+                edit: false,
               )),
     );
-
-    if (result != null) {
-      setState(() {
-        _credentialsList.add(Credentials.clone(result));
-      });
-    }
+    setState(() {});
+    // if (result != null) {
+    //   setState(() {
+    //     _credentialsList.add(Credentials.clone(result));
+    //   });
+    // }
   }
 
   void _awaitProfile(
-      BuildContext context, Credentials credentials, int i) async {
+      BuildContext context, String platform, String accountName) async {
     final result = await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => Profile(
-            credentials: credentials,
-            i: i,
+            platform: platform,
+            accountName: accountName,
           ),
         ));
 
-    if (result != null) {
-      setState(() {
-        if (result[0] == 0) {
-          _credentialsList[i] = Credentials.clone(result[1]);
-        } else if (result[0] == 1) {
-          _credentialsList.removeAt(i);
-        }
-      });
-    }
+    setState(() {});
+    // if (result != null) {
+    //   setState(() {
+    //     if (result[0] == 0) {
+    //       _credentialsList[i] = Credentials.clone(result[1]);
+    //     } else if (result[0] == 1) {
+    //       _credentialsList.removeAt(i);
+    //     }
+    //   });
+    // }
+  }
+
+  void printData() async {
+    var db = new DatabaseHelper();
+    List<Credentials> credentials = await db.getAllCredentials();
+    credentials.forEach((element) {
+      print(element);
+    });
+    print("Done printing");
+  }
+
+  void deleteTable() async {
+    var db = new DatabaseHelper();
+    db.deleteTable();
+    print("Deleted");
+    setState(() {});
+  }
+
+  void printPath() async {
+    var db = new DatabaseHelper();
+    db.printPath();
   }
 
   @override
@@ -137,14 +242,48 @@ class _CredentialsListState extends State<CredentialsList> {
                   style: TextStyle(color: Colors.white),
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.blue,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.black
+                      : Colors.blue,
                 ),
               ),
             ),
             ListTile(
-              title: Text('Settings'),
-              onTap: () {},
+              title: Text('Print Data'),
+              onTap: () {
+                printData();
+              },
             ),
+            ListTile(
+              title: Text('Delete Table'),
+              onTap: () {
+                deleteTable();
+              },
+            ),
+            ListTile(
+              title: Text('Print Path'),
+              onTap: () {
+                printPath();
+              },
+            ),
+            ListTile(
+              title: Text('Dark Mode'),
+              onTap: () {
+                // isLightMode.add(false);
+                // _toggleDarkMode();
+                DynamicTheme.of(context).setBrightness(
+                    Theme.of(context).brightness == Brightness.dark
+                        ? Brightness.light
+                        : Brightness.dark);
+                // print(Theme.of(context).brightness);
+              },
+            ),
+            // ListTile(
+            //   title: Text('Light Mode'),
+            //   onTap: () {
+            //     isLightMode.add(true);
+            //   },
+            // ),
           ],
         ),
       ),
@@ -152,6 +291,7 @@ class _CredentialsListState extends State<CredentialsList> {
       floatingActionButton: FloatingActionButton(
         child: Icon(
           Icons.add,
+          color: Colors.white,
         ),
         onPressed: () {
           _awaitAddCredentials(context);
@@ -165,12 +305,14 @@ class _CredentialsListState extends State<CredentialsList> {
 class AddCredentials extends StatelessWidget {
   final _formKey = GlobalKey<FormState>();
   Credentials credentials;
-  AddCredentials({Key key, @required this.credentials}) : super(key: key);
+  bool edit;
+  AddCredentials({Key key, @required this.credentials, @required this.edit})
+      : super(key: key);
   Credentials newCredentials;
 
   @override
   Widget build(BuildContext context) {
-    // credentials = Credentials(null);
+    var db = new DatabaseHelper();
     newCredentials = Credentials.clone(credentials);
     return Scaffold(
       appBar: AppBar(
@@ -214,7 +356,7 @@ class AddCredentials extends StatelessWidget {
                   Container(
                     child: TextFormField(
                       style: TextStyle(fontSize: 18),
-                      initialValue: credentials.accountName == null
+                      initialValue: credentials.accountName == "null"
                           ? null
                           : credentials.accountName,
                       decoration: InputDecoration(
@@ -302,8 +444,9 @@ class AddCredentials extends StatelessWidget {
                   onPressed: () {
                     if (_formKey.currentState.validate()) {
                       newCredentials.accountName =
-                          newCredentials.accountName == ""
-                              ? null
+                          newCredentials.accountName == "" ||
+                                  newCredentials.accountName == null
+                              ? 'null'
                               : newCredentials.accountName;
                       newCredentials.username = newCredentials.username == ""
                           ? null
@@ -314,7 +457,22 @@ class AddCredentials extends StatelessWidget {
                       newCredentials.notes = newCredentials.notes == ""
                           ? null
                           : newCredentials.notes;
-                      Navigator.pop(context, newCredentials);
+
+                      if (!edit) {
+                        db.saveCredentials(newCredentials);
+                        Navigator.pop(context);
+                      } else if (credentials.platform !=
+                              newCredentials.platform ||
+                          credentials.accountName !=
+                              newCredentials.accountName) {
+                        db.saveCredentials(newCredentials);
+                        db.deleteCredentials(
+                            credentials.platform, credentials.accountName);
+                        Navigator.pop(context, newCredentials);
+                      } else {
+                        db.updateCredentials(newCredentials);
+                        Navigator.pop(context);
+                      }
                     }
                   },
                   child: Text(
@@ -323,6 +481,9 @@ class AddCredentials extends StatelessWidget {
                   ),
                   style: ElevatedButton.styleFrom(
                     shape: StadiumBorder(),
+                    primary: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.black
+                        : null,
                   ),
                 ),
                 width: MediaQuery.of(context).size.width / 2,
@@ -337,9 +498,9 @@ class AddCredentials extends StatelessWidget {
 }
 
 class Profile extends StatefulWidget {
-  Credentials credentials;
-  int i;
-  Profile({Key key, @required this.credentials, @required this.i})
+  String platform;
+  String accountName;
+  Profile({Key key, @required this.platform, @required this.accountName})
       : super(key: key);
 
   @override
@@ -350,107 +511,124 @@ class _ProfileState extends State<Profile> {
   void empty() {}
 
   void _awaitAddCredentials(
-      BuildContext context, Credentials credentials, int i) async {
+      BuildContext context, Credentials credentials) async {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
           builder: (context) => AddCredentials(
                 credentials: credentials,
+                edit: true,
               )),
     );
 
     if (result != null) {
-      setState(() {
-        widget.credentials = Credentials.clone(result);
-      });
+      widget.platform = result.platform;
+      widget.accountName = result.accountName;
     }
+    setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-        appBar: AppBar(
-          title: Text(widget.credentials.platform),
-          leading: IconButton(
-              icon: Icon(Icons.arrow_back),
-              onPressed: () {
-                Navigator.pop(context, [0, widget.credentials]);
-              }),
-          actions: [
-            IconButton(
-                icon: Icon(Icons.edit),
-                onPressed: () {
-                  _awaitAddCredentials(context, widget.credentials, widget.i);
-                }),
-            IconButton(
-                icon: Icon(Icons.delete),
-                onPressed: () {
-                  deleteCredentials(context);
-                }),
-          ],
-        ),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              Text(
-                widget.credentials.accountName == null
-                    ? ""
-                    : widget.credentials.accountName,
-                style: TextStyle(
-                    fontSize: widget.credentials.accountName == null ? 0 : 40,
-                    fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
+    var db = new DatabaseHelper();
+    return FutureBuilder<Credentials>(
+      future: db.getCredentials(widget.platform, widget.accountName),
+      builder: (BuildContext context, AsyncSnapshot<Credentials> snapshot) {
+        Widget child;
+        if (snapshot.hasData) {
+          child = Scaffold(
+              appBar: AppBar(
+                title: Text(snapshot.data.platform),
+                leading: IconButton(
+                    icon: Icon(Icons.arrow_back),
+                    onPressed: () {
+                      // Navigator.pop(context, [0, widget.credentials]);
+                      Navigator.pop(context);
+                    }),
+                actions: [
+                  IconButton(
+                      icon: Icon(Icons.edit),
+                      onPressed: () {
+                        _awaitAddCredentials(context, snapshot.data);
+                      }),
+                  IconButton(
+                      icon: Icon(Icons.delete),
+                      onPressed: () {
+                        deleteCredentials(context, snapshot.data.platform,
+                            snapshot.data.accountName, db);
+                      }),
+                ],
               ),
-              SizedBox(
-                height: widget.credentials.accountName == null ? 0 : 40,
-              ),
-              Text(
-                widget.credentials.username == null
-                    ? ""
-                    : widget.credentials.username,
-                style: TextStyle(
-                    fontSize: widget.credentials.username == null ? 0 : 30),
-              ),
-              SizedBox(
-                height: 10,
-              ),
-              Text(
-                widget.credentials.password == null
-                    ? ""
-                    : widget.credentials.password,
-                style: TextStyle(
-                    fontSize: widget.credentials.password == null ? 0 : 30),
-              ),
-              SizedBox(
-                height: widget.credentials.notes == null ||
-                        widget.credentials.username == null &&
-                            widget.credentials.password == null &&
-                            widget.credentials.accountName == null
-                    ? 0
-                    : 35,
-              ),
-              Container(
-                  // width: MediaQuery.of(context).size.width/
-                  padding: const EdgeInsets.all(8.0),
-                  child: Text(
-                    widget.credentials.notes == null
-                        ? ""
-                        : widget.credentials.notes,
-                    style: TextStyle(
-                        fontSize: widget.credentials.notes == null ? 0 : 18),
-                    textAlign: TextAlign.center,
-                  )),
-              SizedBox(
-                height: 40,
-              ),
-            ],
-          ),
-        ));
+              body: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: <Widget>[
+                    Text(
+                      snapshot.data.accountName == "null"
+                          ? ""
+                          : snapshot.data.accountName,
+                      style: TextStyle(
+                          fontSize:
+                              snapshot.data.accountName == "null" ? 0 : 40,
+                          fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                    SizedBox(
+                      height: snapshot.data.accountName == "null" ? 0 : 40,
+                    ),
+                    Text(
+                      snapshot.data.username == null
+                          ? ""
+                          : snapshot.data.username,
+                      style: TextStyle(
+                          fontSize: snapshot.data.username == null ? 0 : 30),
+                    ),
+                    SizedBox(
+                      height: 10,
+                    ),
+                    Text(
+                      snapshot.data.password == null
+                          ? ""
+                          : snapshot.data.password,
+                      style: TextStyle(
+                          fontSize: snapshot.data.password == null ? 0 : 30),
+                    ),
+                    SizedBox(
+                      height: snapshot.data.notes == null ||
+                              snapshot.data.username == null &&
+                                  snapshot.data.password == null &&
+                                  snapshot.data.accountName == null
+                          ? 0
+                          : 35,
+                    ),
+                    Container(
+                        // width: MediaQuery.of(context).size.width/
+                        padding: const EdgeInsets.all(8.0),
+                        child: Text(
+                          snapshot.data.notes == null
+                              ? ""
+                              : snapshot.data.notes,
+                          style: TextStyle(
+                              fontSize: snapshot.data.notes == null ? 0 : 18),
+                          textAlign: TextAlign.center,
+                        )),
+                    SizedBox(
+                      height: 40,
+                    ),
+                  ],
+                ),
+              ));
+        } else {
+          child = Container();
+        }
+        return child;
+      },
+    );
   }
 }
 
-void deleteCredentials(BuildContext context) {
+void deleteCredentials(BuildContext context, String platform,
+    String accountName, DatabaseHelper db) {
   Widget cancelButton = TextButton(
     child: Text("Cancel"),
     onPressed: () {
@@ -462,8 +640,9 @@ void deleteCredentials(BuildContext context) {
     child: Text("Delete"),
     onPressed: () {
       Navigator.of(context).pop();
-      // Navigator.of(context).pop();
-      Navigator.pop(context, [1, null]);
+      Navigator.of(context).pop();
+      db.deleteCredentials(platform, accountName);
+      // Navigator.pop(context, [1, null]);
     },
   );
 

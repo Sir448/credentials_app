@@ -32,8 +32,8 @@ dependencies:
   local_auth: ^0.6.3+4
   # local_auth_device_credentials: ^0.6.3+10
   shared_preferences: ^0.5.12
-  sqflite:
-  path:
+  sqflite_sqlcipher: ^1.1.4
+  dynamic_theme: ^1.0.1
 
 dev_dependencies:
   flutter_test:
