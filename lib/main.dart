@@ -13,6 +13,8 @@ import 'package:sqflite_sqlcipher/sql.dart';
 import 'package:sqflite_sqlcipher/sqlite_api.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:local_auth/local_auth.dart';
+
 import 'package:dynamic_theme/dynamic_theme.dart';
 
 import 'credentials.dart';
@@ -185,6 +187,24 @@ class _CredentialsListState extends State<CredentialsList> {
 
   void _awaitProfile(
       BuildContext context, String platform, String accountName) async {
+    final LocalAuthentication auth = LocalAuthentication();
+    bool canCheckBiometrics;
+    try {
+      canCheckBiometrics = await auth.canCheckBiometrics;
+    } on PlatformException catch (e) {
+      print(e);
+    }
+    if (canCheckBiometrics) {
+      bool authenticated = false;
+      try {
+        authenticated = await auth.authenticateWithBiometrics(
+            localizedReason: "Please verify to view credentials");
+      } on PlatformException catch (e) {
+        print(e);
+      }
+      if (!mounted || !authenticated) return;
+    }
+
     final result = await Navigator.push(
         context,
         MaterialPageRoute(
