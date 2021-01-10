@@ -29,12 +29,9 @@ void main() {
 // void main() {
 //   runApp(MaterialApp(
 //     title: 'Add Credentials',
-//     home: Profile(),
+//     // theme: ThemeData.dark(),
+//     home: Settings(),
 //   ));
-// }
-// Future<void> getMode() async {
-//   SharedPreferences prefs = await SharedPreferences.getInstance();
-//   isLightMode.add(prefs.getBool('lightMode') ?? true);
 // }
 
 class MyApp extends StatelessWidget {
@@ -66,7 +63,8 @@ class CredentialsList extends StatefulWidget {
 }
 
 class _CredentialsListState extends State<CredentialsList> {
-  var _credentialsList = <Credentials>[];
+  // var _credentialsList = <Credentials>[];
+  // SharedPreferences prefs = await SharedPreferences.getInstance();
   SearchBar searchBar;
   String search;
   bool searching = false;
@@ -116,16 +114,6 @@ class _CredentialsListState extends State<CredentialsList> {
     );
   }
 
-  // Widget _buildList() {
-  //   return ListView.separated(
-  //       separatorBuilder: (context, index) => Divider(),
-  //       itemCount: _credentialsList.length,
-  //       padding: EdgeInsets.all(16.0),
-  //       itemBuilder: /*1*/ (context, i) {
-  //         return _buildRow(_credentialsList[i], context, i);
-  //       });
-  // }
-
   Widget _buildList() {
     var db = new DatabaseHelper();
     return FutureBuilder<List>(
@@ -165,8 +153,9 @@ class _CredentialsListState extends State<CredentialsList> {
 
   void _awaitAddCredentials(BuildContext context) async {
     /*
-    0 = Pin
-    1 = Biometric
+    0 = None
+    1 = Pin
+    2 = Biometric
     */
 
     final result = await Navigator.push(
@@ -187,22 +176,27 @@ class _CredentialsListState extends State<CredentialsList> {
 
   void _awaitProfile(
       BuildContext context, String platform, String accountName) async {
-    final LocalAuthentication auth = LocalAuthentication();
-    bool canCheckBiometrics;
-    try {
-      canCheckBiometrics = await auth.canCheckBiometrics;
-    } on PlatformException catch (e) {
-      print(e);
-    }
-    if (canCheckBiometrics) {
-      bool authenticated = false;
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    int authMethod = prefs.getInt('authMethod');
+    if (authMethod == 1) {
+    } else if (authMethod == 2) {
+      final LocalAuthentication auth = LocalAuthentication();
+      bool canCheckBiometrics;
       try {
-        authenticated = await auth.authenticateWithBiometrics(
-            localizedReason: "Please verify to view credentials");
+        canCheckBiometrics = await auth.canCheckBiometrics;
       } on PlatformException catch (e) {
         print(e);
       }
-      if (!mounted || !authenticated) return;
+      if (canCheckBiometrics) {
+        bool authenticated = false;
+        try {
+          authenticated = await auth.authenticateWithBiometrics(
+              localizedReason: "Please verify to view credentials");
+        } on PlatformException catch (e) {
+          print(e);
+        }
+        if (!mounted || !authenticated) return;
+      }
     }
 
     final result = await Navigator.push(
@@ -247,8 +241,39 @@ class _CredentialsListState extends State<CredentialsList> {
     db.printPath();
   }
 
+  void _awaitSettings(BuildContext context) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    int authMethod = prefs.getInt('authMethod');
+    if (authMethod == 1) {
+    } else if (authMethod == 2) {
+      final LocalAuthentication auth = LocalAuthentication();
+      bool canCheckBiometrics;
+      try {
+        canCheckBiometrics = await auth.canCheckBiometrics;
+      } on PlatformException catch (e) {
+        print(e);
+      }
+      if (canCheckBiometrics) {
+        bool authenticated = false;
+        try {
+          authenticated = await auth.authenticateWithBiometrics(
+              localizedReason: "Please verify to view credentials");
+        } on PlatformException catch (e) {
+          print(e);
+        }
+        if (!mounted || !authenticated) return;
+      }
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => Settings()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    /*Placeholder */
+    setAuth(context);
     return Scaffold(
       drawer: Drawer(
         child: ListView(
@@ -269,9 +294,20 @@ class _CredentialsListState extends State<CredentialsList> {
               ),
             ),
             ListTile(
+              title: Text("Settings"),
+              onTap: () {
+                // Navigator.push(
+                //   context,
+                //   MaterialPageRoute(builder: (context) => Settings()),
+                // );
+                _awaitSettings(context);
+              },
+            ),
+            ListTile(
               title: Text('Print Data'),
               onTap: () {
-                printData();
+                // printData();
+                setAuth(context);
               },
             ),
             ListTile(
@@ -286,22 +322,16 @@ class _CredentialsListState extends State<CredentialsList> {
                 printPath();
               },
             ),
-            ListTile(
-              title: Text('Dark Mode'),
-              onTap: () {
-                // isLightMode.add(false);
-                // _toggleDarkMode();
-                DynamicTheme.of(context).setBrightness(
-                    Theme.of(context).brightness == Brightness.dark
-                        ? Brightness.light
-                        : Brightness.dark);
-                // print(Theme.of(context).brightness);
-              },
-            ),
             // ListTile(
-            //   title: Text('Light Mode'),
+            //   title: Text('Dark Mode'),
             //   onTap: () {
-            //     isLightMode.add(true);
+            //     // isLightMode.add(false);
+            //     // _toggleDarkMode();
+            //     DynamicTheme.of(context).setBrightness(
+            //         Theme.of(context).brightness == Brightness.dark
+            //             ? Brightness.light
+            //             : Brightness.dark);
+            //     // print(Theme.of(context).brightness);
             //   },
             // ),
           ],
@@ -315,6 +345,7 @@ class _CredentialsListState extends State<CredentialsList> {
         ),
         onPressed: () {
           _awaitAddCredentials(context);
+          // setAuth(context);
         },
       ),
       body: _buildList(),
@@ -681,4 +712,265 @@ void deleteCredentials(BuildContext context, String platform,
       return alert;
     },
   );
+}
+
+class Settings extends StatefulWidget {
+  @override
+  _SettingsState createState() => _SettingsState();
+}
+
+class _SettingsState extends State<Settings> {
+  LocalAuthentication auth = LocalAuthentication();
+  bool isSwitched = false;
+  int dropdownValue = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    isSwitched = Theme.of(context).brightness == Brightness.dark;
+    return FutureBuilder<List>(
+        // future: auth.getAvailableBiometrics(),
+        future: Future.wait(
+            [auth.getAvailableBiometrics(), SharedPreferences.getInstance()]),
+        builder: (BuildContext context, AsyncSnapshot<List> snapshot) {
+          if (snapshot.hasData) {
+            dropdownValue = snapshot.data[1].getInt('authMethod');
+          }
+          List<DropdownMenuItem<int>> _menuItems;
+
+          if (snapshot.hasData && snapshot.data[0].isNotEmpty) {
+            _menuItems = [
+              DropdownMenuItem(
+                child: Text("None"),
+                value: 0,
+              ),
+              DropdownMenuItem(
+                child: Text("Pin"),
+                value: 1,
+              ),
+              DropdownMenuItem(
+                child: Text(snapshot.data[0].contains(BiometricType.fingerprint)
+                    ? "Fingerprint"
+                    : "Face"),
+                value: 2,
+              ),
+            ];
+          } else {
+            _menuItems = [
+              DropdownMenuItem(
+                child: Text("None"),
+                value: 0,
+              ),
+              DropdownMenuItem(
+                child: Text("Pin"),
+                value: 1,
+              ),
+            ];
+          }
+
+          return Scaffold(
+            appBar: AppBar(
+              title: Text("Settings"),
+            ),
+            body: Column(
+              children: <Widget>[
+                Padding(
+                  padding: EdgeInsets.all(20.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        "Dark Mode",
+                        style: TextStyle(fontSize: 20),
+                      ),
+                      Switch(
+                        value: isSwitched,
+                        onChanged: (value) {
+                          setState(() {
+                            isSwitched = value;
+                            DynamicTheme.of(context).setBrightness(isSwitched
+                                ? Brightness.dark
+                                : Brightness.light);
+                          });
+                        },
+                        activeTrackColor:
+                            Theme.of(context).brightness == Brightness.dark
+                                ? null
+                                : Colors.lightBlueAccent,
+                        activeColor:
+                            Theme.of(context).brightness == Brightness.dark
+                                ? null
+                                : Colors.blue,
+                      )
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: EdgeInsets.all(10),
+                  child: DropdownButton<int>(
+                    value: dropdownValue,
+                    iconSize: 40,
+                    elevation: 16,
+                    underline: Container(
+                      height: 2,
+                      color: Colors.blue,
+                    ),
+                    onChanged: (int newValue) {
+                      setState(() {
+                        dropdownValue = newValue;
+                        snapshot.data[1].setInt('authMethod', newValue);
+                        // print(newValue);
+                        // print(snapshot.)
+                      });
+                    },
+                    items: _menuItems,
+                  ),
+                ),
+              ],
+            ),
+          );
+        });
+  }
+}
+
+Future<void> setAuth(BuildContext context) async {
+  final _formKey = GlobalKey<FormState>();
+  final LocalAuthentication auth = LocalAuthentication();
+  int pin;
+  SharedPreferences prefs = await SharedPreferences.getInstance();
+  // prefs.clear();
+
+  List<BiometricType> availableBiometrics;
+  try {
+    availableBiometrics = await auth.getAvailableBiometrics();
+  } on PlatformException catch (e) {
+    print(e);
+  }
+  // if (!mounted) return;
+
+  Widget cancelButton = TextButton(
+    child: Text("Cancel"),
+    onPressed: () {
+      Navigator.of(context).pop();
+    },
+  );
+
+  Widget enterButton = TextButton(
+    child: Text("Enter"),
+    onPressed: () {
+      if (_formKey.currentState.validate()) {
+        prefs.setInt('authMethod', 0);
+        prefs.setInt('pin', pin);
+        Navigator.of(context).pop();
+      }
+    },
+  );
+
+  AlertDialog setPin = AlertDialog(
+    title: Text("Set Pin"),
+    content: Form(
+      key: _formKey,
+      child: TextFormField(
+        style: TextStyle(fontSize: 20),
+        decoration: InputDecoration(
+          hintText: 'Pin',
+        ),
+        textAlign: TextAlign.center,
+        keyboardType: TextInputType.number,
+        validator: (value) {
+          if (value.isEmpty) {
+            return 'Cannot be empty';
+          } else if (int.tryParse(value) == null) {
+            return 'Must be numbers only';
+          }
+          return null;
+        },
+        onChanged: (value) {
+          pin = int.tryParse(value);
+        },
+      ),
+    ),
+    actions: [
+      cancelButton,
+      enterButton,
+    ],
+  );
+
+  Widget noneButton = TextButton(
+    child: Text("None"),
+    onPressed: () {
+      prefs.setInt('authMethod', 0);
+      Navigator.of(context).pop();
+      // showDialog(
+      //     context: context,
+      //     barrierDismissible: false,
+      //     builder: (BuildContext context) {
+      //       return setPin;
+      //     });
+    },
+  );
+
+  Widget pinButton = TextButton(
+    child: Text("Pin"),
+    onPressed: () {
+      prefs.setInt('authMethod', 1);
+      Navigator.of(context).pop();
+      // showDialog(
+      //     context: context,
+      //     barrierDismissible: false,
+      //     builder: (BuildContext context) {
+      //       return setPin;
+      //     });
+    },
+  );
+
+  Widget biometricButton = TextButton(
+    child: Text(availableBiometrics.contains(BiometricType.fingerprint)
+        ? "Fingerprint"
+        : "Face"),
+    onPressed: () {
+      prefs.setInt('authMethod', 2);
+      Navigator.of(context).pop();
+    },
+  );
+
+  AlertDialog chooseAuth = AlertDialog(
+    title: Text("Choose Authentication Type"),
+    // context: Te
+    actions: [
+      noneButton,
+      pinButton,
+      availableBiometrics.isNotEmpty ? biometricButton : null,
+    ],
+  );
+
+  // if (availableBiometrics.isEmpty) {
+  //   showDialog(
+  //       context: context,
+  //       barrierDismissible: false,
+  //       builder: (BuildContext context) {
+  //         return setPin;
+  //       });
+  // } else {
+  //   showDialog(
+  //       context: context,
+  //       barrierDismissible: false,
+  //       builder: (BuildContext context) {
+  //         return chooseAuth;
+  //       });
+  // }
+  // int authMethod = prefs.getInt('authMethod');
+  // print(authMethod == 0
+  //     ? "None"
+  //     : authMethod == 1
+  //         ? "Pin"
+  //         : "Biometric");
+  if (prefs.getInt('authMethod') == null) {
+    showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return chooseAuth;
+        });
+  }
+  // print(prefs.getInt('test'));
 }
