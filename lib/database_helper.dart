@@ -46,8 +46,11 @@ class DatabaseHelper {
 
   Future<List> getAllCredentials() async {
     var dbClient = await db;
-    List<Map> result = await dbClient.query('Credentials',
-        columns: ['platform', 'account_name', 'username', 'password', 'notes']);
+    List<Map> result = await dbClient.query(
+      'Credentials',
+      columns: ['platform', 'account_name'],
+      orderBy: 'platform ASC, account_name ASC',
+    );
     List<Credentials> credentials = <Credentials>[];
     result.forEach(
         (credential) => credentials.add(Credentials.fromMap(credential)));
@@ -58,9 +61,10 @@ class DatabaseHelper {
     var dbClient = await db;
     List<Map> result = await dbClient.query(
       'Credentials',
-      columns: ['platform', 'account_name', 'username', 'password', 'notes'],
+      columns: ['platform', 'account_name'],
       where: 'platform LIKE ? or account_name LIKE ?',
       whereArgs: ['%$search%', '%$search%'],
+      orderBy: 'platform ASC, account_name ASC',
     );
     // List<Map> result = await db.rawQuery('S');
 
@@ -87,6 +91,19 @@ class DatabaseHelper {
     }
 
     return null;
+  }
+
+  Future<bool> checkCredentials(String platform, String accountName) async {
+    var dbClient = await db;
+    List<Map> result = await dbClient.query(
+      'Credentials',
+      columns: ['platform'],
+      where: 'platform = ? and account_name = ?',
+      whereArgs: [platform, accountName == null ? 'null' : accountName],
+      limit: 1,
+    );
+    if (result.isNotEmpty) return false;
+    return true;
   }
 
   Future<int> deleteCredentials(String platform, String accountName) async {
@@ -117,5 +134,16 @@ class DatabaseHelper {
     String databasesPath = await getDatabasesPath();
     String path = join(databasesPath, 'credentials.db');
     print(path);
+  }
+
+  Future<bool> tableEmpty() async {
+    var dbClient = await db;
+    List<Map> result = await dbClient.query(
+      'Credentials',
+      columns: ['platform'],
+      limit: 1,
+    );
+    if (result.isNotEmpty) return false;
+    return true;
   }
 }

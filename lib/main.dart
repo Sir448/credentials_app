@@ -264,10 +264,16 @@ class _CredentialsListState extends State<CredentialsList> {
         if (!mounted || !authenticated) return;
       }
     }
-    Navigator.push(
+    var db = new DatabaseHelper();
+    bool tableEmpty = await db.tableEmpty();
+    await Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => Settings()),
+      MaterialPageRoute(
+          builder: (context) => Settings(
+                tableEmpty: tableEmpty,
+              )),
     );
+    setState(() {});
   }
 
   @override
@@ -360,6 +366,43 @@ class AddCredentials extends StatelessWidget {
   AddCredentials({Key key, @required this.credentials, @required this.edit})
       : super(key: key);
   Credentials newCredentials;
+  bool existingCredential = false;
+
+  void checkCredentials(
+      DatabaseHelper db, String platform, String accountName) async {
+    existingCredential = await db.checkCredentials(platform, accountName);
+  }
+
+  void submitCredentials(DatabaseHelper db, BuildContext context,
+      String platform, String accountName) async {
+    existingCredential = await db.checkCredentials(platform, accountName);
+    if (_formKey.currentState.validate()) {
+      newCredentials.accountName =
+          newCredentials.accountName == "" || newCredentials.accountName == null
+              ? 'null'
+              : newCredentials.accountName;
+      newCredentials.username =
+          newCredentials.username == "" ? null : newCredentials.username;
+      newCredentials.password =
+          newCredentials.password == "" ? null : newCredentials.password;
+      newCredentials.notes =
+          newCredentials.notes == "" ? null : newCredentials.notes;
+
+      if (!edit) {
+        /*Placeholder */
+        db.saveCredentials(newCredentials);
+        Navigator.pop(context);
+      } else if (credentials.platform != newCredentials.platform ||
+          credentials.accountName != newCredentials.accountName) {
+        db.saveCredentials(newCredentials);
+        db.deleteCredentials(credentials.platform, credentials.accountName);
+        Navigator.pop(context, newCredentials);
+      } else {
+        db.updateCredentials(newCredentials);
+        Navigator.pop(context);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -394,6 +437,8 @@ class AddCredentials extends StatelessWidget {
                       validator: (value) {
                         if (value.isEmpty) {
                           return 'Must have platform';
+                        } else if (!existingCredential) {
+                          return 'Duplicate account';
                         }
                         return null;
                       },
@@ -416,6 +461,17 @@ class AddCredentials extends StatelessWidget {
                       textAlign: TextAlign.center,
                       onChanged: (String value) {
                         newCredentials.accountName = value;
+                        // checkCredentials(db, newCredentials.platform,
+                        //     newCredentials.accountName);
+                        // existingCredential = await db.checkCredentials(
+                        //     newCredentials.platform,
+                        //     newCredentials.accountName);
+                      },
+                      validator: (value) {
+                        if (!existingCredential) {
+                          return 'Duplicate account';
+                        }
+                        return null;
                       },
                     ),
                     width: MediaQuery.of(context).size.width * 3 / 7,
@@ -493,38 +549,8 @@ class AddCredentials extends StatelessWidget {
               SizedBox(
                 child: ElevatedButton(
                   onPressed: () {
-                    if (_formKey.currentState.validate()) {
-                      newCredentials.accountName =
-                          newCredentials.accountName == "" ||
-                                  newCredentials.accountName == null
-                              ? 'null'
-                              : newCredentials.accountName;
-                      newCredentials.username = newCredentials.username == ""
-                          ? null
-                          : newCredentials.username;
-                      newCredentials.password = newCredentials.password == ""
-                          ? null
-                          : newCredentials.password;
-                      newCredentials.notes = newCredentials.notes == ""
-                          ? null
-                          : newCredentials.notes;
-
-                      if (!edit) {
-                        db.saveCredentials(newCredentials);
-                        Navigator.pop(context);
-                      } else if (credentials.platform !=
-                              newCredentials.platform ||
-                          credentials.accountName !=
-                              newCredentials.accountName) {
-                        db.saveCredentials(newCredentials);
-                        db.deleteCredentials(
-                            credentials.platform, credentials.accountName);
-                        Navigator.pop(context, newCredentials);
-                      } else {
-                        db.updateCredentials(newCredentials);
-                        Navigator.pop(context);
-                      }
-                    }
+                    submitCredentials(db, context, newCredentials.platform,
+                        newCredentials.accountName);
                   },
                   child: Text(
                     'Confirm',
@@ -678,6 +704,58 @@ class _ProfileState extends State<Profile> {
   }
 }
 
+// void deleteCredentials(BuildContext context, String platform,
+//     String accountName, DatabaseHelper db,
+//     {bool all = false, bool tableEmpty}) {
+//   Widget cancelButton = TextButton(
+//     child: Text("Cancel"),
+//     onPressed: () {
+//       Navigator.of(context).pop();
+//     },
+//   );
+
+//   Widget deleteButton = TextButton(
+//     child: Text("Delete"),
+//     onPressed: () {
+//       Navigator.of(context).pop();
+//       Navigator.of(context).pop();
+//       db.deleteCredentials(platform, accountName);
+//       // Navigator.pop(context, [1, null]);
+//     },
+//   );
+
+//   Widget deleteAllButton = TextButton(
+//     onPressed: () {
+//       Navigator.of(context).pop();
+//       // Navigator.pop(context, true);
+//       var db = new DatabaseHelper();
+//       db.deleteTable();
+//       print("Deleted");
+//       tableEmpty = true;
+
+//     },
+//     child: Text("Delete All"),
+//   );
+
+//   AlertDialog alert = AlertDialog(
+//     title: Text(all ? "Delete All Credentials" : "Delete Credentials"),
+//     content: Text(all
+//         ? "Are you sure you would like to delete all credentials? This cannot be undone."
+//         : "Are you sure you would like to delete these credentials?"),
+//     actions: [
+//       cancelButton,
+//       all ? deleteAllButton : deleteButton,
+//     ],
+//   );
+
+//   showDialog(
+//     context: context,
+//     builder: (BuildContext context) {
+//       return alert;
+//     },
+//   );
+// }
+
 void deleteCredentials(BuildContext context, String platform,
     String accountName, DatabaseHelper db) {
   Widget cancelButton = TextButton(
@@ -715,6 +793,9 @@ void deleteCredentials(BuildContext context, String platform,
 }
 
 class Settings extends StatefulWidget {
+  bool tableEmpty;
+  Settings({Key key, @required this.tableEmpty}) : super(key: key);
+
   @override
   _SettingsState createState() => _SettingsState();
 }
@@ -723,6 +804,55 @@ class _SettingsState extends State<Settings> {
   LocalAuthentication auth = LocalAuthentication();
   bool isSwitched = false;
   int dropdownValue = 0;
+  bool tableEmpty = false;
+
+  void empty() {}
+
+  void deleteAllCredentials(BuildContext context, DatabaseHelper db) {
+    Widget cancelButton = TextButton(
+      child: Text("Cancel"),
+      onPressed: () {
+        Navigator.of(context).pop();
+      },
+    );
+
+    Widget deleteAllButton = TextButton(
+      onPressed: () {
+        Navigator.of(context).pop();
+        // Navigator.pop(context, true);
+        var db = new DatabaseHelper();
+        db.deleteTable();
+        print("Deleted");
+        widget.tableEmpty = true;
+        tableEmpty = true;
+        setState(() {});
+      },
+      child: Text("Delete All"),
+    );
+
+    AlertDialog alert = AlertDialog(
+      title: Text("Delete All Credentials"),
+      content: Text(
+          "Are you sure you would like to delete all credentials? This cannot be undone."),
+      actions: [
+        cancelButton,
+        deleteAllButton,
+      ],
+    );
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return alert;
+      },
+    );
+  }
+
+  void deleteAll(BuildContext context) async {
+    // print("test 1");
+    var db = new DatabaseHelper();
+    deleteAllCredentials(context, db);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -823,6 +953,24 @@ class _SettingsState extends State<Settings> {
                       });
                     },
                     items: _menuItems,
+                  ),
+                ),
+                Container(
+                  padding: EdgeInsets.all(10),
+                  height: 60,
+                  child: ElevatedButton(
+                    onPressed: widget.tableEmpty || tableEmpty
+                        ? null
+                        : () {
+                            deleteAll(context);
+                          },
+                    child: Text("Delete All Credentials"),
+                    style: ElevatedButton.styleFrom(
+                      // primary: Theme.of(context).brightness == Brightness.dark
+                      //     ? Colors.black
+                      //     : null,
+                      primary: Colors.red[600],
+                    ),
                   ),
                 ),
               ],
