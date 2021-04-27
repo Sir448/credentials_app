@@ -1,9 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/cupertino.dart';
-import 'package:sqflite_sqlcipher/sqflite.dart';
-import 'package:sqflite_sqlcipher/sql.dart';
-import 'package:sqflite_sqlcipher/sqlite_api.dart';
+import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'credentials.dart';
 
@@ -28,8 +25,7 @@ class DatabaseHelper {
     String databasesPath = await getDatabasesPath();
     String path = join(databasesPath, 'credentials.db');
 
-    var db = await openDatabase(path,
-        version: 1, onCreate: _onCreate, password: "poggers");
+    var db = await openDatabase(path, version: 1, onCreate: _onCreate);
     return db;
   }
 
@@ -66,7 +62,6 @@ class DatabaseHelper {
       whereArgs: ['%$search%', '%$search%'],
       orderBy: 'platform ASC, account_name ASC',
     );
-    // List<Map> result = await db.rawQuery('S');
 
     if (result.isEmpty) return null;
 
