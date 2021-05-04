@@ -84,7 +84,7 @@ class AddCredentials extends StatelessWidget {
                       validator: (value) {
                         if (value.isEmpty) {
                           return 'Must have platform';
-                        } else if (!existingCredential) {
+                        } else if (!existingCredential && !edit) {
                           return 'Duplicate account';
                         }
                         return null;
@@ -110,7 +110,7 @@ class AddCredentials extends StatelessWidget {
                         newCredentials.accountName = value;
                       },
                       validator: (value) {
-                        if (!existingCredential) {
+                        if (!existingCredential && !edit) {
                           return 'Duplicate account';
                         }
                         return null;
@@ -193,6 +193,9 @@ class AddCredentials extends StatelessWidget {
                   onPressed: () {
                     submitCredentials(db, context, newCredentials.platform,
                         newCredentials.accountName);
+                  },
+                  onLongPress: () {
+                    print(newCredentials);
                   },
                   child: Text(
                     'Confirm',

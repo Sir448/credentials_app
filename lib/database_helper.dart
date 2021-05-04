@@ -7,8 +7,6 @@ import 'credentials.dart';
 class DatabaseHelper {
   static final DatabaseHelper _instance = new DatabaseHelper.internal();
   factory DatabaseHelper() => _instance;
-  // DatabaseHelper._();
-  // static final DatabaseHelper database = DatabaseHelper._();
   static Database _db;
   DatabaseHelper.internal();
 
@@ -81,11 +79,7 @@ class DatabaseHelper {
       whereArgs: [platform, accountName],
     );
 
-    if (result.isNotEmpty) {
-      return new Credentials.fromMap(result.first);
-    }
-
-    return null;
+    return result.isNotEmpty ? Credentials.fromMap(result.first) : null;
   }
 
   Future<bool> checkCredentials(String platform, String accountName) async {
@@ -97,8 +91,8 @@ class DatabaseHelper {
       whereArgs: [platform, accountName == null ? 'null' : accountName],
       limit: 1,
     );
-    if (result.isNotEmpty) return false;
-    return true;
+
+    return result.isEmpty;
   }
 
   Future<int> deleteCredentials(String platform, String accountName) async {
@@ -138,7 +132,6 @@ class DatabaseHelper {
       columns: ['platform'],
       limit: 1,
     );
-    if (result.isNotEmpty) return false;
-    return true;
+    return result.isEmpty;
   }
 }

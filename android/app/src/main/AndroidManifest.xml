@@ -1,7 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.example.credentials_app">
    <application
-        android:label="credentials_app"
+        android:label="Credentials"
         android:icon="@mipmap/key_logo">
         <activity
             android:name=".MainActivity"
